@@ -1,3 +1,7 @@
+// to support 1.15.1
+#![allow(unknown_lints)]
+#![allow(renamed_and_removed_lints)]
+#![allow(redundant_field_names)]
 use std::fmt::Debug;
 use std::io::Read;
 use std::str::FromStr;
@@ -20,7 +24,7 @@ pub struct Scanner<R: Read> {
 
 impl<R: Read> Tokenizer<R> {
     pub fn new(reader: R) -> Self {
-        Tokenizer { reader }
+        Tokenizer { reader: reader }
     }
 
     pub fn next_token(&mut self) -> Option<String> {
@@ -50,10 +54,10 @@ impl<R: Read> Tokenizer<R> {
         if line.is_empty() {
             return None;
         }
-        if let Some(b'\n') = line.last() {
+        if let Some(&b'\n') = line.last() {
             line.pop();
         }
-        if let Some(b'\r') = line.last() {
+        if let Some(&b'\r') = line.last() {
             line.pop();
         }
         Some(String::from_utf8(line).expect("UTF-8 encoding error"))
