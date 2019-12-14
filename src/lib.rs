@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn test_scan() {
-        let buffer: &[u8] = &[b'-', b'1', b'0', b' ', b'\n', b'1', b'.', b'1', b' ', b'\n'];
+        let buffer: &[u8] = b"-10\n1.1\n";
         let mut sc = Scanner::new(buffer);
         assert_eq!(sc.scan::<i64>(), Some(-10));
         assert_eq!(sc.scan::<f64>(), Some(1.1));
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_next_line() {
-        let buffer: &[u8] = &[b'a', b'b', b'\r', b'\n', b'\n', b'c'];
+        let buffer: &[u8] = b"ab\r\n\nc";
         let mut tk = Tokenizer::new(buffer);
         assert_eq!(tk.next_line(), Some("ab".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let buffer: &[u8] = &[b'a', b'b', b' ', b'\n', b'c', b' ', b'd', b' ', b'\n'];
+        let buffer: &[u8] = b"ab \nc d \n";
         let mut tk = Tokenizer::new(buffer);
         assert_eq!(tk.next_token(), Some("ab".to_string()));
         assert_eq!(tk.next_token(), Some("c".to_string()));
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_next_token_and_line() {
-        let buffer: &[u8] = &[b'a', b'b', b' ', b'\n', b'c', b' ', b'd', b' ', b'\n'];
+        let buffer: &[u8] = b"ab \nc d \n";
         let mut tk = Tokenizer::new(buffer);
         assert_eq!(tk.next_token(), Some("ab".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_next_line_empty_lines() {
-        let buffer: &[u8] = &[b'\n', b'\n'];
+        let buffer: &[u8] = b"\n\n";
         let mut tk = Tokenizer::new(buffer);
         assert_eq!(tk.next_line(), Some("".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_next_token_empty_lines() {
-        let buffer: &[u8] = &[b'\n', b'\n'];
+        let buffer: &[u8] = b"\n\n";
         let mut tk = Tokenizer::new(buffer);
         assert_eq!(tk.next_token(), None);
     }
