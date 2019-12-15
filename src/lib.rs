@@ -2,9 +2,41 @@
 #![allow(unknown_lints)]
 #![allow(renamed_and_removed_lints)]
 #![allow(redundant_field_names)]
+
 use std::fmt::Debug;
 use std::io::Read;
 use std::str::FromStr;
+
+#[macro_export]
+macro_rules! scan {
+    ($($t:tt),*) => {{
+        let stdin = std::io::stdin();
+        let mut sc = Scanner::new(stdin.lock());
+        read!(sc, $($t),*)
+    }};
+}
+
+#[macro_export]
+macro_rules! read {
+    ($r:expr, [char]) => {
+        read!($r, String).chars().collect::<Vec<char>>()
+    };
+    ($r:expr, [u8]) => {
+        Vec::from(read!($r, String).into_bytes())
+    };
+    ($r:expr, [($($t:ty),*); $n:expr]) => {
+        (0..$n).map(|_| read!($r, $($t),*)).collect::<Vec<$t>>()
+    };
+    ($r:expr, [$t:ty; $n:expr]) => {
+        (0..$n).map(|_| read!($r, $t)).collect::<Vec<$t>>()
+    };
+    ($r:expr, ($($t:ty),*)) => {
+        ($(read!($r, $t)),*)
+    };
+    ($r:expr, $t:ty) => {
+        $r.scan::<$t>().expect("EOF")
+    };
+}
 
 fn is_ascii_whitespace(b: u8) -> bool {
     // Can use u8::is_ascii_whitespace once removing support of 1.15.1
@@ -71,10 +103,6 @@ impl<R: Read> Scanner<R> {
         }
     }
 
-    pub fn next_line(&mut self) -> Option<String> {
-        self.tokenizer.next_line()
-    }
-
     pub fn scan<T>(&mut self) -> Option<T>
     where
         T: FromStr,
@@ -84,15 +112,30 @@ impl<R: Read> Scanner<R> {
             .next_token()
             .map(|s| s.parse::<T>().expect("parse error"))
     }
+
+    pub fn next_line(&mut self) -> Option<String> {
+        self.tokenizer.next_line()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Scanner;
-    use super::Tokenizer;
+    use super::*;
+    use std::io::Cursor;
 
     #[test]
-    fn test_scan() {
+    fn test_read() {
+        let buffer = Cursor::new(b"-10\n1.1\n");
+        let mut sc = Scanner::new(buffer);
+        assert_eq!((-10i64, 1.1f64), read!(sc, (i64, f64)));
+
+        let buffer = Cursor::new(b"-10\n1.1\n");
+        let mut sc = Scanner::new(buffer);
+        assert_eq!(vec!['-', '1', '0'], read!(sc, [char]));
+    }
+
+    #[test]
+    fn test_scanner() {
         let buffer: &[u8] = b"-10\n1.1\n";
         let mut sc = Scanner::new(buffer);
         assert_eq!(sc.scan::<i64>(), Some(-10));
