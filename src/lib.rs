@@ -3,9 +3,10 @@
 #![allow(renamed_and_removed_lints)]
 #![allow(redundant_field_names)]
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::io::{self, BufRead, Read};
 use std::str::FromStr;
+use std::string::FromUtf8Error;
 
 #[macro_export]
 macro_rules! scan {
@@ -26,19 +27,16 @@ macro_rules! fscan {
 #[macro_export]
 macro_rules! _fscan {
     ($r:expr, [char]) => {
-        _fscan!($r, String).chars().collect::<Vec<char>>()
+        $r.scan_chars()
     };
-    ($r:expr, [($($t:ty),*); $n:expr]) => {
-        (0..$n).map(|_| _fscan!($r, ($($t),*))).collect::<Vec<_>>()
+    ($r:expr, [$t:ty]) => {
+        $r.scan_all::<$t>()
     };
     ($r:expr, [$t:ty; $n:expr]) => {
-        (0..$n).map(|_| _fscan!($r, $t)).collect::<Vec<$t>>()
-    };
-    ($r:expr, ($($t:ty),*)) => {
-        ($(_fscan!($r, $t)),*)
+        $r.scan_vec::<$t>($n)
     };
     ($r:expr, $t:ty) => {
-        $r.scan::<$t>().expect("EOF")
+        $r.scan::<$t>()
     };
 }
 
@@ -80,25 +78,35 @@ pub struct Scanner<'a, R: Read + 'a> {
     tokenizer: Tokenizer<'a, R>,
 }
 
+#[derive(Debug)]
+pub enum Error {
+    IoError(io::Error),
+    EncodingError(FromUtf8Error),
+    ParseError(String),
+    Eof,
+}
+
 impl<'a, R: Read> Tokenizer<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
         Tokenizer { reader: reader }
     }
 
-    pub fn next_token(&mut self) -> Option<String> {
-        let token: Vec<u8> = self
-            .reader
-            .by_ref()
-            .bytes()
-            .map(|r| r.expect("IO error"))
-            .skip_while(|&b| is_ascii_whitespace(b))
-            .take_while(|&b| !is_ascii_whitespace(b))
-            .collect();
-        if token.is_empty() {
-            None
-        } else {
-            Some(String::from_utf8(token).expect("UTF-8 encoding error"))
+    pub fn next_token(&mut self) -> Result<Option<String>, Error> {
+        let mut token = Vec::new();
+        for b in self.reader.by_ref().bytes() {
+            let b = b.map_err(Error::IoError)?;
+            match (is_ascii_whitespace(b), token.is_empty()) {
+                (false, _) => token.push(b),
+                (true, false) => break,
+                (true, true) => {}
+            }
         }
+        if token.is_empty() {
+            return Ok(None);
+        }
+        String::from_utf8(token)
+            .map(Some)
+            .map_err(Error::EncodingError)
     }
 }
 
@@ -109,14 +117,60 @@ impl<'a, R: Read> Scanner<'a, R> {
         }
     }
 
-    pub fn scan<T>(&mut self) -> Option<T>
+    pub fn scan<T>(&mut self) -> Result<T, Error>
     where
         T: FromStr,
-        <T as FromStr>::Err: Debug,
+        <T as FromStr>::Err: Debug + Display,
     {
-        self.tokenizer
-            .next_token()
-            .map(|s| s.parse::<T>().expect("parse error"))
+        let token = self.tokenizer.next_token()?;
+        match token {
+            Some(s) => s
+                .parse::<T>()
+                .map_err(|e| Error::ParseError(format!("{}", e))),
+            None => Err(Error::Eof),
+        }
+    }
+
+    pub fn scan_chars(&mut self) -> Result<Vec<char>, Error> {
+        Ok(self.scan::<String>()?.chars().collect())
+    }
+
+    pub fn scan_all<T>(&mut self) -> Result<Vec<T>, Error>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: Debug + Display,
+    {
+        let mut result = Vec::new();
+        loop {
+            let s = self.tokenizer.next_token()?;
+            let s = match s {
+                Some(s) => s
+                    .parse::<T>()
+                    .map_err(|e| Error::ParseError(format!("{}", e)))?,
+                None => break,
+            };
+            result.push(s);
+        }
+        Ok(result)
+    }
+
+    pub fn scan_vec<T>(&mut self, n: usize) -> Result<Vec<T>, Error>
+    where
+        T: FromStr,
+        <T as FromStr>::Err: Debug + Display,
+    {
+        let mut result = Vec::new();
+        for _ in 0..n {
+            let s = self.tokenizer.next_token()?;
+            let s = match s {
+                Some(s) => s
+                    .parse::<T>()
+                    .map_err(|e| Error::ParseError(format!("{}", e)))?,
+                None => return Err(Error::Eof),
+            };
+            result.push(s);
+        }
+        Ok(result)
     }
 }
 
@@ -128,20 +182,23 @@ mod tests {
     #[test]
     fn test_read() {
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(-10i64, fscan!(buffer, i64));
-        assert_eq!(1.1f64, fscan!(buffer, f64));
+        assert_eq!(-10i64, fscan!(buffer, i64).unwrap());
+        assert_eq!(1.1f64, fscan!(buffer, f64).unwrap());
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!((-10i64, 1.1f64), fscan!(buffer, (i64, f64)));
+        assert_eq!((-10i64, 1.1f64), fscan!(buffer, (i64, f64)).unwrap());
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec![(-10i64, 1.1f64)], fscan!(buffer, [(i64, f64); 1]));
+        assert_eq!(
+            vec![(-10i64, 1.1f64)],
+            fscan!(buffer, [(i64, f64); 1]).unwrap()
+        );
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec![-10f64, 1.1f64], fscan!(buffer, [f64; 2]));
+        assert_eq!(vec![-10f64, 1.1f64], fscan!(buffer, [f64; 2]).unwrap());
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec!['-', '1', '0'], fscan!(buffer, [char]));
+        assert_eq!(vec!['-', '1', '0'], fscan!(buffer, [char]).unwrap());
     }
 
     #[test]
@@ -156,25 +213,25 @@ mod tests {
     fn test_scanner() {
         let mut buffer: &[u8] = b"-10\n1.1\n";
         let mut sc = Scanner::new(&mut buffer);
-        assert_eq!(sc.scan::<i64>(), Some(-10));
-        assert_eq!(sc.scan::<f64>(), Some(1.1));
-        assert_eq!(sc.scan::<f64>(), None);
+        assert_eq!(sc.scan::<i64>().unwrap(), Some(-10));
+        assert_eq!(sc.scan::<f64>().unwrap(), Some(1.1));
+        assert_eq!(sc.scan::<f64>().unwrap(), None);
     }
 
     #[test]
     fn test_next_token() {
         let mut buffer: &[u8] = b"ab \nc d \n";
         let mut tk = Tokenizer::new(&mut buffer);
-        assert_eq!(tk.next_token(), Some("ab".to_string()));
-        assert_eq!(tk.next_token(), Some("c".to_string()));
-        assert_eq!(tk.next_token(), Some("d".to_string()));
-        assert_eq!(tk.next_token(), None);
+        assert_eq!(tk.next_token().unwrap(), Some("ab".to_string()));
+        assert_eq!(tk.next_token().unwrap(), Some("c".to_string()));
+        assert_eq!(tk.next_token().unwrap(), Some("d".to_string()));
+        assert_eq!(tk.next_token().unwrap(), None);
     }
 
     #[test]
     fn test_next_token_empty_lines() {
         let mut buffer: &[u8] = b"\n\n";
         let mut tk = Tokenizer::new(&mut buffer);
-        assert_eq!(tk.next_token(), None);
+        assert_eq!(tk.next_token().unwrap(), None);
     }
 }
