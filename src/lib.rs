@@ -2,10 +2,11 @@
 #![allow(unknown_lints)]
 #![allow(renamed_and_removed_lints)]
 #![allow(redundant_field_names)]
+#![allow(bare_trait_objects)]
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::io::{self, BufRead, Read};
-use std::str::FromStr;
+use std::iter::Iterator;
 use std::string::FromUtf8Error;
 
 #[macro_export]
@@ -62,20 +63,140 @@ pub fn freadln<R: BufRead>(r: &mut R) -> Result<Option<String>, io::Error> {
     }
 }
 
-fn is_ascii_whitespace(b: u8) -> bool {
-    // Can use u8::is_ascii_whitespace once removing support of 1.15.1
-    match b {
-        b'\t' | b'\n' | b'\x0C' | b'\r' | b' ' => true,
-        _ => false,
-    }
-}
-
 pub struct Tokenizer<'a, R: Read + 'a> {
     reader: &'a mut R,
 }
 
 pub struct Scanner<'a, R: Read + 'a> {
     tokenizer: Tokenizer<'a, R>,
+}
+
+pub trait FromTokens<R>
+where
+    Self: Sized,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error>;
+}
+
+macro_rules! from_tokens_primitives {
+    ($($t:ty),*) => { $(
+        impl<R: Read> FromTokens<R> for $t {
+            fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+                let token = tokenizer.next_token()?;
+                match token {
+                    Some(s) => s
+                        .parse::<$t>()
+                        .map_err(|e| Error::ParseError(format!("{}", e))),
+                    None => Err(Error::Eof),
+                }
+            }
+        }
+    )* }
+}
+
+from_tokens_primitives! {
+    String,
+    bool,
+    f32,
+    f64,
+    isize,
+    i8,
+    i16,
+    i32,
+    i64,
+    usize,
+    u8,
+    u16,
+    u32,
+    u64
+}
+
+impl<T1, T2, R> FromTokens<R> for (T1, T2)
+where
+    T1: FromTokens<R>,
+    T2: FromTokens<R>,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+        Ok((T1::from_tokens(tokenizer)?, T2::from_tokens(tokenizer)?))
+    }
+}
+
+impl<T1, T2, T3, R> FromTokens<R> for (T1, T2, T3)
+where
+    T1: FromTokens<R>,
+    T2: FromTokens<R>,
+    T3: FromTokens<R>,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+        Ok((
+            T1::from_tokens(tokenizer)?,
+            T2::from_tokens(tokenizer)?,
+            T3::from_tokens(tokenizer)?,
+        ))
+    }
+}
+
+impl<T1, T2, T3, T4, R> FromTokens<R> for (T1, T2, T3, T4)
+where
+    T1: FromTokens<R>,
+    T2: FromTokens<R>,
+    T3: FromTokens<R>,
+    T4: FromTokens<R>,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+        Ok((
+            T1::from_tokens(tokenizer)?,
+            T2::from_tokens(tokenizer)?,
+            T3::from_tokens(tokenizer)?,
+            T4::from_tokens(tokenizer)?,
+        ))
+    }
+}
+
+impl<T1, T2, T3, T4, T5, R> FromTokens<R> for (T1, T2, T3, T4, T5)
+where
+    T1: FromTokens<R>,
+    T2: FromTokens<R>,
+    T3: FromTokens<R>,
+    T4: FromTokens<R>,
+    T5: FromTokens<R>,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+        Ok((
+            T1::from_tokens(tokenizer)?,
+            T2::from_tokens(tokenizer)?,
+            T3::from_tokens(tokenizer)?,
+            T4::from_tokens(tokenizer)?,
+            T5::from_tokens(tokenizer)?,
+        ))
+    }
+}
+
+impl<T1, T2, T3, T4, T5, T6, R> FromTokens<R> for (T1, T2, T3, T4, T5, T6)
+where
+    T1: FromTokens<R>,
+    T2: FromTokens<R>,
+    T3: FromTokens<R>,
+    T4: FromTokens<R>,
+    T5: FromTokens<R>,
+    T6: FromTokens<R>,
+    R: Read,
+{
+    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+        Ok((
+            T1::from_tokens(tokenizer)?,
+            T2::from_tokens(tokenizer)?,
+            T3::from_tokens(tokenizer)?,
+            T4::from_tokens(tokenizer)?,
+            T5::from_tokens(tokenizer)?,
+            T6::from_tokens(tokenizer)?,
+        ))
+    }
 }
 
 #[derive(Debug)]
@@ -119,16 +240,9 @@ impl<'a, R: Read> Scanner<'a, R> {
 
     pub fn scan<T>(&mut self) -> Result<T, Error>
     where
-        T: FromStr,
-        <T as FromStr>::Err: Debug + Display,
+        T: FromTokens<R>,
     {
-        let token = self.tokenizer.next_token()?;
-        match token {
-            Some(s) => s
-                .parse::<T>()
-                .map_err(|e| Error::ParseError(format!("{}", e))),
-            None => Err(Error::Eof),
-        }
+        FromTokens::from_tokens(&mut self.tokenizer)
     }
 
     pub fn scan_chars(&mut self) -> Result<Vec<char>, Error> {
@@ -137,8 +251,7 @@ impl<'a, R: Read> Scanner<'a, R> {
 
     pub fn scan_all<T>(&mut self) -> Result<Vec<T>, Error>
     where
-        T: FromStr,
-        <T as FromStr>::Err: Debug + Display,
+        T: FromTokens<R>,
     {
         let mut result = Vec::new();
         loop {
@@ -152,14 +265,21 @@ impl<'a, R: Read> Scanner<'a, R> {
 
     pub fn scan_vec<T>(&mut self, n: usize) -> Result<Vec<T>, Error>
     where
-        T: FromStr,
-        <T as FromStr>::Err: Debug + Display,
+        T: FromTokens<R>,
     {
         let mut result = Vec::new();
         for _ in 0..n {
             result.push(self.scan()?)
         }
         Ok(result)
+    }
+}
+
+fn is_ascii_whitespace(b: u8) -> bool {
+    // Can use u8::is_ascii_whitespace once removing support of 1.15.1
+    match b {
+        b'\t' | b'\n' | b'\x0C' | b'\r' | b' ' => true,
+        _ => false,
     }
 }
 
@@ -202,9 +322,12 @@ mod tests {
     fn test_scanner() {
         let mut buffer: &[u8] = b"-10\n1.1\n";
         let mut sc = Scanner::new(&mut buffer);
-        assert_eq!(sc.scan::<i64>().unwrap(), Some(-10));
-        assert_eq!(sc.scan::<f64>().unwrap(), Some(1.1));
-        assert_eq!(sc.scan::<f64>().unwrap(), None);
+        assert_eq!(sc.scan::<i64>().unwrap(), -10i64);
+        assert_eq!(sc.scan::<f64>().unwrap(), 1.1f64);
+        match sc.scan::<f64>() {
+            Err(Error::Eof) => {} // expected
+            _ => panic!("unexpected result"),
+        }
     }
 
     #[test]
