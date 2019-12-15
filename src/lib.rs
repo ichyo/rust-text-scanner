@@ -16,6 +16,14 @@ macro_rules! scan {
 }
 
 #[macro_export]
+macro_rules! scanln {
+    ($($t:tt),*) => {{
+        let stdin = std::io::stdin();
+        readln!(stdin.lock(), $($t),*)
+    }};
+}
+
+#[macro_export]
 macro_rules! read {
     ($r:expr, $($t:tt),*) => {{
         let mut sc = Scanner::new(&mut $r);
@@ -24,15 +32,20 @@ macro_rules! read {
 }
 
 #[macro_export]
+macro_rules! readln {
+    ($r:expr) => {{
+        let mut sc = Scanner::new(&mut $r);
+        sc.next_line()
+    }};
+}
+
+#[macro_export]
 macro_rules! _read {
     ($r:expr, [char]) => {
         _read!($r, String).chars().collect::<Vec<char>>()
     };
-    ($r:expr, [u8]) => {
-        Vec::from(read!($r, String).into_bytes())
-    };
     ($r:expr, [($($t:ty),*); $n:expr]) => {
-        (0..$n).map(|_| _read!($r, $($t),*)).collect::<Vec<$t>>()
+        (0..$n).map(|_| _read!($r, ($($t),*))).collect::<Vec<_>>()
     };
     ($r:expr, [$t:ty; $n:expr]) => {
         (0..$n).map(|_| _read!($r, $t)).collect::<Vec<$t>>()
@@ -133,10 +146,28 @@ mod tests {
     #[test]
     fn test_read() {
         let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!(-10i64, read!(buffer, i64));
+        assert_eq!(1.1f64, read!(buffer, f64));
+
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
         assert_eq!((-10i64, 1.1f64), read!(buffer, (i64, f64)));
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!(vec![(-10i64, 1.1f64)], read!(buffer, [(i64, f64); 1]));
+
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!(vec![-10f64, 1.1f64], read!(buffer, [f64; 2]));
+
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
         assert_eq!(vec!['-', '1', '0'], read!(buffer, [char]));
+    }
+
+    #[test]
+    fn test_readln() {
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!(Some("-10".to_string()), readln!(buffer));
+        assert_eq!(Some("1.1".to_string()), readln!(buffer));
+        assert_eq!(None, readln!(buffer));
     }
 
     #[test]
