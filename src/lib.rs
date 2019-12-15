@@ -11,27 +11,34 @@ use std::str::FromStr;
 macro_rules! scan {
     ($($t:tt),*) => {{
         let stdin = std::io::stdin();
-        let mut sc = Scanner::new(stdin.lock());
-        read!(sc, $($t),*)
+        read!(stdin.lock(), $($t),*)
     }};
 }
 
 #[macro_export]
 macro_rules! read {
+    ($r:expr, $($t:tt),*) => {{
+        let mut sc = Scanner::new(&mut $r);
+        _read!(sc, $($t),*)
+    }}
+}
+
+#[macro_export]
+macro_rules! _read {
     ($r:expr, [char]) => {
-        read!($r, String).chars().collect::<Vec<char>>()
+        _read!($r, String).chars().collect::<Vec<char>>()
     };
     ($r:expr, [u8]) => {
         Vec::from(read!($r, String).into_bytes())
     };
     ($r:expr, [($($t:ty),*); $n:expr]) => {
-        (0..$n).map(|_| read!($r, $($t),*)).collect::<Vec<$t>>()
+        (0..$n).map(|_| _read!($r, $($t),*)).collect::<Vec<$t>>()
     };
     ($r:expr, [$t:ty; $n:expr]) => {
-        (0..$n).map(|_| read!($r, $t)).collect::<Vec<$t>>()
+        (0..$n).map(|_| _read!($r, $t)).collect::<Vec<$t>>()
     };
     ($r:expr, ($($t:ty),*)) => {
-        ($(read!($r, $t)),*)
+        ($(_read!($r, $t)),*)
     };
     ($r:expr, $t:ty) => {
         $r.scan::<$t>().expect("EOF")
@@ -46,16 +53,16 @@ fn is_ascii_whitespace(b: u8) -> bool {
     }
 }
 
-pub struct Tokenizer<R: Read> {
-    reader: R,
+pub struct Tokenizer<'a, R: Read + 'a> {
+    reader: &'a mut R,
 }
 
-pub struct Scanner<R: Read> {
-    tokenizer: Tokenizer<R>,
+pub struct Scanner<'a, R: Read + 'a> {
+    tokenizer: Tokenizer<'a, R>,
 }
 
-impl<R: Read> Tokenizer<R> {
-    pub fn new(reader: R) -> Self {
+impl<'a, R: Read> Tokenizer<'a, R> {
+    pub fn new(reader: &'a mut R) -> Self {
         Tokenizer { reader: reader }
     }
 
@@ -96,8 +103,8 @@ impl<R: Read> Tokenizer<R> {
     }
 }
 
-impl<R: Read> Scanner<R> {
-    pub fn new(reader: R) -> Self {
+impl<'a, R: Read> Scanner<'a, R> {
+    pub fn new(reader: &'a mut R) -> Self {
         Scanner {
             tokenizer: Tokenizer::new(reader),
         }
@@ -125,19 +132,17 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let buffer = Cursor::new(b"-10\n1.1\n");
-        let mut sc = Scanner::new(buffer);
-        assert_eq!((-10i64, 1.1f64), read!(sc, (i64, f64)));
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!((-10i64, 1.1f64), read!(buffer, (i64, f64)));
 
-        let buffer = Cursor::new(b"-10\n1.1\n");
-        let mut sc = Scanner::new(buffer);
-        assert_eq!(vec!['-', '1', '0'], read!(sc, [char]));
+        let mut buffer = Cursor::new(b"-10\n1.1\n");
+        assert_eq!(vec!['-', '1', '0'], read!(buffer, [char]));
     }
 
     #[test]
     fn test_scanner() {
-        let buffer: &[u8] = b"-10\n1.1\n";
-        let mut sc = Scanner::new(buffer);
+        let mut buffer: &[u8] = b"-10\n1.1\n";
+        let mut sc = Scanner::new(&mut buffer);
         assert_eq!(sc.scan::<i64>(), Some(-10));
         assert_eq!(sc.scan::<f64>(), Some(1.1));
         assert_eq!(sc.scan::<f64>(), None);
@@ -145,8 +150,8 @@ mod tests {
 
     #[test]
     fn test_next_line() {
-        let buffer: &[u8] = b"ab\r\n\nc";
-        let mut tk = Tokenizer::new(buffer);
+        let mut buffer: &[u8] = b"ab\r\n\nc";
+        let mut tk = Tokenizer::new(&mut buffer);
         assert_eq!(tk.next_line(), Some("ab".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
         assert_eq!(tk.next_line(), Some("c".to_string()));
@@ -155,8 +160,8 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let buffer: &[u8] = b"ab \nc d \n";
-        let mut tk = Tokenizer::new(buffer);
+        let mut buffer: &[u8] = b"ab \nc d \n";
+        let mut tk = Tokenizer::new(&mut buffer);
         assert_eq!(tk.next_token(), Some("ab".to_string()));
         assert_eq!(tk.next_token(), Some("c".to_string()));
         assert_eq!(tk.next_token(), Some("d".to_string()));
@@ -165,8 +170,8 @@ mod tests {
 
     #[test]
     fn test_next_token_and_line() {
-        let buffer: &[u8] = b"ab \nc d \n";
-        let mut tk = Tokenizer::new(buffer);
+        let mut buffer: &[u8] = b"ab \nc d \n";
+        let mut tk = Tokenizer::new(&mut buffer);
         assert_eq!(tk.next_token(), Some("ab".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
         assert_eq!(tk.next_line(), Some("c d ".to_string()));
@@ -175,8 +180,8 @@ mod tests {
 
     #[test]
     fn test_next_line_empty_lines() {
-        let buffer: &[u8] = b"\n\n";
-        let mut tk = Tokenizer::new(buffer);
+        let mut buffer: &[u8] = b"\n\n";
+        let mut tk = Tokenizer::new(&mut buffer);
         assert_eq!(tk.next_line(), Some("".to_string()));
         assert_eq!(tk.next_line(), Some("".to_string()));
         assert_eq!(tk.next_line(), None);
@@ -184,8 +189,8 @@ mod tests {
 
     #[test]
     fn test_next_token_empty_lines() {
-        let buffer: &[u8] = b"\n\n";
-        let mut tk = Tokenizer::new(buffer);
+        let mut buffer: &[u8] = b"\n\n";
+        let mut tk = Tokenizer::new(&mut buffer);
         assert_eq!(tk.next_token(), None);
     }
 }
