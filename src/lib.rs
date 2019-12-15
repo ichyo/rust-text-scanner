@@ -142,16 +142,12 @@ impl<'a, R: Read> Scanner<'a, R> {
     {
         let mut result = Vec::new();
         loop {
-            let s = self.tokenizer.next_token()?;
-            let s = match s {
-                Some(s) => s
-                    .parse::<T>()
-                    .map_err(|e| Error::ParseError(format!("{}", e)))?,
-                None => break,
-            };
-            result.push(s);
+            match self.scan() {
+                Ok(val) => result.push(val),
+                Err(Error::Eof) => return Ok(result),
+                Err(e) => return Err(e),
+            }
         }
-        Ok(result)
     }
 
     pub fn scan_vec<T>(&mut self, n: usize) -> Result<Vec<T>, Error>
@@ -161,14 +157,7 @@ impl<'a, R: Read> Scanner<'a, R> {
     {
         let mut result = Vec::new();
         for _ in 0..n {
-            let s = self.tokenizer.next_token()?;
-            let s = match s {
-                Some(s) => s
-                    .parse::<T>()
-                    .map_err(|e| Error::ParseError(format!("{}", e)))?,
-                None => return Err(Error::Eof),
-            };
-            result.push(s);
+            result.push(self.scan()?)
         }
         Ok(result)
     }
