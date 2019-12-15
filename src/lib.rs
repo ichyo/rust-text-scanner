@@ -4,7 +4,6 @@
 #![allow(redundant_field_names)]
 #![allow(bare_trait_objects)]
 
-use std::fmt::Debug;
 use std::io::{self, BufRead, Read};
 use std::iter::Iterator;
 use std::string::FromUtf8Error;
