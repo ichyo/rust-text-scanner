@@ -4,7 +4,7 @@
 #![allow(redundant_field_names)]
 
 use std::fmt::Debug;
-use std::io::Read;
+use std::io::{self, BufRead, Read};
 use std::str::FromStr;
 
 #[macro_export]
@@ -16,46 +16,52 @@ macro_rules! scan {
 }
 
 #[macro_export]
-macro_rules! scanln {
-    ($($t:tt),*) => {{
-        let stdin = std::io::stdin();
-        readln!(stdin.lock(), $($t),*)
-    }};
-}
-
-#[macro_export]
-macro_rules! read {
+macro_rules! fscan {
     ($r:expr, $($t:tt),*) => {{
         let mut sc = Scanner::new(&mut $r);
-        _read!(sc, $($t),*)
+        _fscan!(sc, $($t),*)
     }}
 }
 
 #[macro_export]
-macro_rules! readln {
-    ($r:expr) => {{
-        let mut sc = Scanner::new(&mut $r);
-        sc.next_line()
-    }};
-}
-
-#[macro_export]
-macro_rules! _read {
+macro_rules! _fscan {
     ($r:expr, [char]) => {
-        _read!($r, String).chars().collect::<Vec<char>>()
+        _fscan!($r, String).chars().collect::<Vec<char>>()
     };
     ($r:expr, [($($t:ty),*); $n:expr]) => {
-        (0..$n).map(|_| _read!($r, ($($t),*))).collect::<Vec<_>>()
+        (0..$n).map(|_| _fscan!($r, ($($t),*))).collect::<Vec<_>>()
     };
     ($r:expr, [$t:ty; $n:expr]) => {
-        (0..$n).map(|_| _read!($r, $t)).collect::<Vec<$t>>()
+        (0..$n).map(|_| _fscan!($r, $t)).collect::<Vec<$t>>()
     };
     ($r:expr, ($($t:ty),*)) => {
-        ($(_read!($r, $t)),*)
+        ($(_fscan!($r, $t)),*)
     };
     ($r:expr, $t:ty) => {
         $r.scan::<$t>().expect("EOF")
     };
+}
+
+pub fn readln() -> Result<Option<String>, io::Error> {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    freadln(&mut stdin)
+}
+
+pub fn freadln<R: BufRead>(r: &mut R) -> Result<Option<String>, io::Error> {
+    let mut buf = String::new();
+    let length = r.read_line(&mut buf)?;
+    if let Some('\n') = buf.chars().last() {
+        buf.pop();
+    }
+    if let Some('\r') = buf.chars().last() {
+        buf.pop();
+    }
+    if length == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(buf))
+    }
 }
 
 fn is_ascii_whitespace(b: u8) -> bool {
@@ -94,26 +100,6 @@ impl<'a, R: Read> Tokenizer<'a, R> {
             Some(String::from_utf8(token).expect("UTF-8 encoding error"))
         }
     }
-
-    pub fn next_line(&mut self) -> Option<String> {
-        let mut line = Vec::new();
-        for b in self.reader.by_ref().bytes().map(|r| r.expect("IO error")) {
-            line.push(b);
-            if b == b'\n' {
-                break;
-            }
-        }
-        if line.is_empty() {
-            return None;
-        }
-        if let Some(&b'\n') = line.last() {
-            line.pop();
-        }
-        if let Some(&b'\r') = line.last() {
-            line.pop();
-        }
-        Some(String::from_utf8(line).expect("UTF-8 encoding error"))
-    }
 }
 
 impl<'a, R: Read> Scanner<'a, R> {
@@ -132,10 +118,6 @@ impl<'a, R: Read> Scanner<'a, R> {
             .next_token()
             .map(|s| s.parse::<T>().expect("parse error"))
     }
-
-    pub fn next_line(&mut self) -> Option<String> {
-        self.tokenizer.next_line()
-    }
 }
 
 #[cfg(test)]
@@ -146,28 +128,28 @@ mod tests {
     #[test]
     fn test_read() {
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(-10i64, read!(buffer, i64));
-        assert_eq!(1.1f64, read!(buffer, f64));
+        assert_eq!(-10i64, fscan!(buffer, i64));
+        assert_eq!(1.1f64, fscan!(buffer, f64));
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!((-10i64, 1.1f64), read!(buffer, (i64, f64)));
+        assert_eq!((-10i64, 1.1f64), fscan!(buffer, (i64, f64)));
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec![(-10i64, 1.1f64)], read!(buffer, [(i64, f64); 1]));
+        assert_eq!(vec![(-10i64, 1.1f64)], fscan!(buffer, [(i64, f64); 1]));
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec![-10f64, 1.1f64], read!(buffer, [f64; 2]));
+        assert_eq!(vec![-10f64, 1.1f64], fscan!(buffer, [f64; 2]));
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec!['-', '1', '0'], read!(buffer, [char]));
+        assert_eq!(vec!['-', '1', '0'], fscan!(buffer, [char]));
     }
 
     #[test]
     fn test_readln() {
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(Some("-10".to_string()), readln!(buffer));
-        assert_eq!(Some("1.1".to_string()), readln!(buffer));
-        assert_eq!(None, readln!(buffer));
+        let mut buffer = Cursor::new(b"-10\n1.1\r\n");
+        assert_eq!(Some("-10".to_string()), freadln(&mut buffer).unwrap());
+        assert_eq!(Some("1.1".to_string()), freadln(&mut buffer).unwrap());
+        assert_eq!(None, freadln(&mut buffer).unwrap());
     }
 
     #[test]
@@ -180,16 +162,6 @@ mod tests {
     }
 
     #[test]
-    fn test_next_line() {
-        let mut buffer: &[u8] = b"ab\r\n\nc";
-        let mut tk = Tokenizer::new(&mut buffer);
-        assert_eq!(tk.next_line(), Some("ab".to_string()));
-        assert_eq!(tk.next_line(), Some("".to_string()));
-        assert_eq!(tk.next_line(), Some("c".to_string()));
-        assert_eq!(tk.next_line(), None);
-    }
-
-    #[test]
     fn test_next_token() {
         let mut buffer: &[u8] = b"ab \nc d \n";
         let mut tk = Tokenizer::new(&mut buffer);
@@ -197,25 +169,6 @@ mod tests {
         assert_eq!(tk.next_token(), Some("c".to_string()));
         assert_eq!(tk.next_token(), Some("d".to_string()));
         assert_eq!(tk.next_token(), None);
-    }
-
-    #[test]
-    fn test_next_token_and_line() {
-        let mut buffer: &[u8] = b"ab \nc d \n";
-        let mut tk = Tokenizer::new(&mut buffer);
-        assert_eq!(tk.next_token(), Some("ab".to_string()));
-        assert_eq!(tk.next_line(), Some("".to_string()));
-        assert_eq!(tk.next_line(), Some("c d ".to_string()));
-        assert_eq!(tk.next_token(), None);
-    }
-
-    #[test]
-    fn test_next_line_empty_lines() {
-        let mut buffer: &[u8] = b"\n\n";
-        let mut tk = Tokenizer::new(&mut buffer);
-        assert_eq!(tk.next_line(), Some("".to_string()));
-        assert_eq!(tk.next_line(), Some("".to_string()));
-        assert_eq!(tk.next_line(), None);
     }
 
     #[test]
