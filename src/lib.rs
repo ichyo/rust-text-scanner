@@ -4,6 +4,8 @@
 #![allow(redundant_field_names)]
 #![allow(bare_trait_objects)]
 
+use std::error;
+use std::fmt;
 use std::io::{self, BufRead, Read};
 use std::iter::Iterator;
 use std::string::FromUtf8Error;
@@ -20,6 +22,15 @@ macro_rules! scan {
 macro_rules! fscan {
     ($r:expr, $($t:tt),*) => {{
         let mut sc = Scanner::new(&mut $r);
+        _fscan!(sc, $($t),*)
+    }}
+}
+
+#[macro_export]
+macro_rules! sscan {
+    ($s:expr, $($t:tt),*) => {{
+        let mut buf = $s.as_bytes();
+        let mut sc = Scanner::new(&mut buf);
         _fscan!(sc, $($t),*)
     }}
 }
@@ -206,6 +217,19 @@ pub enum Error {
     Eof,
 }
 
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::IoError(ref e) => writeln!(f, "IO Error: {}", e),
+            Error::EncodingError(ref e) => writeln!(f, "Encoding Error: {}", e),
+            Error::ParseError(ref e) => writeln!(f, "Parse Error: {}", e),
+            Error::Eof => writeln!(f, "EOF"),
+        }
+    }
+}
+
+impl error::Error for Error {}
+
 impl<'a, R: Read> Tokenizer<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
         Tokenizer { reader: reader }
@@ -288,7 +312,7 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn test_read() {
+    fn test_fscan() {
         let mut buffer = Cursor::new(b"-10\n1.1\n");
         assert_eq!(-10i64, fscan!(buffer, i64).unwrap());
         assert_eq!(1.1f64, fscan!(buffer, f64).unwrap());
@@ -307,6 +331,16 @@ mod tests {
 
         let mut buffer = Cursor::new(b"-10\n1.1\n");
         assert_eq!(vec!['-', '1', '0'], fscan!(buffer, [char]).unwrap());
+    }
+
+    #[test]
+    fn test_sscan() {
+        let s = "-10\n1.1\n";
+        assert_eq!((-10i64, 1.1f64), sscan!(s, (i64, f64)).unwrap());
+        assert_eq!(
+            vec!["-10".to_string(), "1.1".to_string()],
+            sscan!(s, [String]).unwrap()
+        );
     }
 
     #[test]
