@@ -129,7 +129,7 @@ where
 }
 
 impl<T: FromTokens> Iterator for ScanIter<T> {
-    type Item = Result<T, Error>;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         let stdin = std::io::stdin();
@@ -137,7 +137,7 @@ impl<T: FromTokens> Iterator for ScanIter<T> {
         let mut tokenizer = Tokenizer::new(&mut stdin);
         match FromTokens::from_tokens(&mut tokenizer) {
             Err(Error::Eof) => None,
-            r => Some(r),
+            r => Some(r.expect("IO error")),
         }
     }
 }
@@ -171,13 +171,13 @@ where
 }
 
 impl<'a, T: FromTokens> Iterator for ScanlnIter<T> {
-    type Item = Result<T, Error>;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut tokenizer = Tokenizer::new(&mut self.cursor);
         match FromTokens::from_tokens(&mut tokenizer) {
             Err(Error::Eof) => None,
-            r => Some(r),
+            r => Some(r.expect("IO error")),
         }
     }
 }
