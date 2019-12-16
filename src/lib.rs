@@ -10,54 +10,71 @@ use std::io::{self, BufRead, Read};
 use std::iter::Iterator;
 use std::string::FromUtf8Error;
 
-#[macro_export]
-macro_rules! scan {
-    ($($t:tt),*) => {{
-        let stdin = std::io::stdin();
-        read!(stdin.lock(), $($t),*)
-    }};
+#[derive(Debug)]
+pub enum Error {
+    IoError(io::Error),
+    EncodingError(FromUtf8Error),
+    ParseError(String),
+    Eof,
 }
 
-#[macro_export]
-macro_rules! fscan {
-    ($r:expr, $($t:tt),*) => {{
-        let mut sc = Scanner::new(&mut $r);
-        _fscan!(sc, $($t),*)
-    }}
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::IoError(ref e) => writeln!(f, "IO Error: {}", e),
+            Error::EncodingError(ref e) => writeln!(f, "Encoding Error: {}", e),
+            Error::ParseError(ref e) => writeln!(f, "Parse Error: {}", e),
+            Error::Eof => writeln!(f, "EOF"),
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! sscan {
-    ($s:expr, $($t:tt),*) => {{
-        let mut buf = $s.as_bytes();
-        let mut sc = Scanner::new(&mut buf);
-        _fscan!(sc, $($t),*)
-    }}
+impl error::Error for Error {
+    // dummy implementation for 1.15.1
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
 }
 
-#[macro_export]
-macro_rules! _fscan {
-    ($r:expr, [char]) => {
-        $r.scan_chars()
-    };
-    ($r:expr, [$t:ty]) => {
-        $r.scan_all::<$t>()
-    };
-    ($r:expr, [$t:ty; $n:expr]) => {
-        $r.scan_vec::<$t>($n)
-    };
-    ($r:expr, $t:ty) => {
-        $r.scan::<$t>()
-    };
-}
-
-pub fn readln() -> Result<Option<String>, io::Error> {
+pub fn read_line() -> Result<Option<String>, io::Error> {
     let stdin = io::stdin();
     let mut stdin = stdin.lock();
-    freadln(&mut stdin)
+    fread_line(&mut stdin)
 }
 
-pub fn freadln<R: BufRead>(r: &mut R) -> Result<Option<String>, io::Error> {
+pub fn scan<T: FromTokens>() -> Result<T, Error> {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    fscan(&mut stdin)
+}
+
+pub fn scanln<T: FromTokens>() -> Result<T, Error> {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    fscanln(&mut stdin)
+}
+
+pub fn scan_iter<T: FromTokens>() -> ScanIter<T> {
+    ScanIter {
+        item_type: std::marker::PhantomData,
+    }
+}
+
+pub fn scanln_iter<T: FromTokens>() -> Result<ScanlnIter<T>, Error> {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    let s = match fread_line(&mut stdin) {
+        Ok(Some(s)) => s,
+        Ok(None) => "".to_string(),
+        Err(e) => return Err(Error::IoError(e)),
+    };
+    Ok(ScanlnIter {
+        cursor: std::io::Cursor::new(s),
+        item_type: std::marker::PhantomData,
+    })
+}
+
+pub fn fread_line<R: BufRead>(r: &mut R) -> Result<Option<String>, io::Error> {
     let mut buf = String::new();
     let length = r.read_line(&mut buf)?;
     if let Some('\n') = buf.chars().last() {
@@ -73,29 +90,116 @@ pub fn freadln<R: BufRead>(r: &mut R) -> Result<Option<String>, io::Error> {
     }
 }
 
-pub struct Tokenizer<'a, R: Read + 'a> {
-    reader: &'a mut R,
+pub fn fscan<R: Read, T: FromTokens>(reader: &mut R) -> Result<T, Error> {
+    let mut tokenizer = Tokenizer::new(reader);
+    FromTokens::from_tokens(&mut tokenizer)
 }
 
-pub struct Scanner<'a, R: Read + 'a> {
+pub fn fscanln<R: BufRead, T: FromTokens>(reader: &mut R) -> Result<T, Error> {
+    let s = match fread_line(reader) {
+        Ok(Some(s)) => s,
+        Ok(None) => return Err(Error::Eof),
+        Err(e) => return Err(Error::IoError(e)),
+    };
+    let mut bytes = s.as_bytes();
+    let mut tokenizer = Tokenizer::new(&mut bytes);
+    FromTokens::from_tokens(&mut tokenizer)
+}
+
+pub fn fscan_iter<R: Read, T: FromTokens>(reader: &mut R) -> FscanIter<R, T> {
+    FscanIter {
+        tokenizer: Tokenizer::new(reader),
+        item_type: std::marker::PhantomData,
+    }
+}
+
+pub fn fscanln_iter<R: BufRead, T: FromTokens>(reader: &mut R) -> Result<ScanlnIter<T>, Error> {
+    let s = match fread_line(reader) {
+        Ok(Some(s)) => s,
+        Ok(None) => "".to_string(),
+        Err(e) => return Err(Error::IoError(e)),
+    };
+    Ok(ScanlnIter {
+        cursor: std::io::Cursor::new(s),
+        item_type: std::marker::PhantomData,
+    })
+}
+
+pub struct ScanIter<T>
+where
+    T: FromTokens,
+{
+    item_type: std::marker::PhantomData<T>,
+}
+
+impl<T: FromTokens> Iterator for ScanIter<T> {
+    type Item = Result<T, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let stdin = std::io::stdin();
+        let mut stdin = stdin.lock();
+        let mut tokenizer = Tokenizer::new(&mut stdin);
+        match FromTokens::from_tokens(&mut tokenizer) {
+            Err(Error::Eof) => None,
+            r => Some(r),
+        }
+    }
+}
+
+pub struct FscanIter<'a, R, T>
+where
+    R: Read + 'a,
+    T: FromTokens,
+{
     tokenizer: Tokenizer<'a, R>,
+    item_type: std::marker::PhantomData<T>,
 }
 
-pub trait FromTokens<R>
+impl<'a, R: Read, T: FromTokens> Iterator for FscanIter<'a, R, T> {
+    type Item = Result<T, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match FromTokens::from_tokens(&mut self.tokenizer) {
+            Err(Error::Eof) => None,
+            r => Some(r),
+        }
+    }
+}
+
+pub struct ScanlnIter<T>
+where
+    T: FromTokens,
+{
+    cursor: std::io::Cursor<String>,
+    item_type: std::marker::PhantomData<T>,
+}
+
+impl<'a, T: FromTokens> Iterator for ScanlnIter<T> {
+    type Item = Result<T, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut tokenizer = Tokenizer::new(&mut self.cursor);
+        match FromTokens::from_tokens(&mut tokenizer) {
+            Err(Error::Eof) => None,
+            r => Some(r),
+        }
+    }
+}
+
+pub trait FromTokens
 where
     Self: Sized,
-    R: Read,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error>;
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error>;
 }
 
 macro_rules! from_tokens_primitives {
     ($($t:ty),*) => { $(
-        impl<R: Read> FromTokens<R> for $t {
-            fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
-                let token = tokenizer.next_token()?;
+        impl FromTokens for $t {
+            fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+                let token = tokenizer.next();
                 match token {
-                    Some(s) => s
+                    Some(s) => s?
                         .parse::<$t>()
                         .map_err(|e| Error::ParseError(format!("{}", e))),
                     None => Err(Error::Eof),
@@ -122,25 +226,23 @@ from_tokens_primitives! {
     u64
 }
 
-impl<T1, T2, R> FromTokens<R> for (T1, T2)
+impl<T1, T2> FromTokens for (T1, T2)
 where
-    T1: FromTokens<R>,
-    T2: FromTokens<R>,
-    R: Read,
+    T1: FromTokens,
+    T2: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
         Ok((T1::from_tokens(tokenizer)?, T2::from_tokens(tokenizer)?))
     }
 }
 
-impl<T1, T2, T3, R> FromTokens<R> for (T1, T2, T3)
+impl<T1, T2, T3> FromTokens for (T1, T2, T3)
 where
-    T1: FromTokens<R>,
-    T2: FromTokens<R>,
-    T3: FromTokens<R>,
-    R: Read,
+    T1: FromTokens,
+    T2: FromTokens,
+    T3: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -149,15 +251,14 @@ where
     }
 }
 
-impl<T1, T2, T3, T4, R> FromTokens<R> for (T1, T2, T3, T4)
+impl<T1, T2, T3, T4> FromTokens for (T1, T2, T3, T4)
 where
-    T1: FromTokens<R>,
-    T2: FromTokens<R>,
-    T3: FromTokens<R>,
-    T4: FromTokens<R>,
-    R: Read,
+    T1: FromTokens,
+    T2: FromTokens,
+    T3: FromTokens,
+    T4: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -167,16 +268,15 @@ where
     }
 }
 
-impl<T1, T2, T3, T4, T5, R> FromTokens<R> for (T1, T2, T3, T4, T5)
+impl<T1, T2, T3, T4, T5> FromTokens for (T1, T2, T3, T4, T5)
 where
-    T1: FromTokens<R>,
-    T2: FromTokens<R>,
-    T3: FromTokens<R>,
-    T4: FromTokens<R>,
-    T5: FromTokens<R>,
-    R: Read,
+    T1: FromTokens,
+    T2: FromTokens,
+    T3: FromTokens,
+    T4: FromTokens,
+    T5: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -187,17 +287,16 @@ where
     }
 }
 
-impl<T1, T2, T3, T4, T5, T6, R> FromTokens<R> for (T1, T2, T3, T4, T5, T6)
+impl<T1, T2, T3, T4, T5, T6> FromTokens for (T1, T2, T3, T4, T5, T6)
 where
-    T1: FromTokens<R>,
-    T2: FromTokens<R>,
-    T3: FromTokens<R>,
-    T4: FromTokens<R>,
-    T5: FromTokens<R>,
-    T6: FromTokens<R>,
-    R: Read,
+    T1: FromTokens,
+    T2: FromTokens,
+    T3: FromTokens,
+    T4: FromTokens,
+    T5: FromTokens,
+    T6: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Tokenizer<R>) -> Result<Self, Error> {
+    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -209,26 +308,9 @@ where
     }
 }
 
-#[derive(Debug)]
-pub enum Error {
-    IoError(io::Error),
-    EncodingError(FromUtf8Error),
-    ParseError(String),
-    Eof,
+struct Tokenizer<'a, R: Read + 'a> {
+    reader: &'a mut R,
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::IoError(ref e) => writeln!(f, "IO Error: {}", e),
-            Error::EncodingError(ref e) => writeln!(f, "Encoding Error: {}", e),
-            Error::ParseError(ref e) => writeln!(f, "Parse Error: {}", e),
-            Error::Eof => writeln!(f, "EOF"),
-        }
-    }
-}
-
-impl error::Error for Error {}
 
 impl<'a, R: Read> Tokenizer<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
@@ -254,47 +336,14 @@ impl<'a, R: Read> Tokenizer<'a, R> {
     }
 }
 
-impl<'a, R: Read> Scanner<'a, R> {
-    pub fn new(reader: &'a mut R) -> Self {
-        Scanner {
-            tokenizer: Tokenizer::new(reader),
+impl<'a, R: Read> Iterator for Tokenizer<'a, R> {
+    type Item = Result<String, Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next_token() {
+            Ok(Some(s)) => Some(Ok(s)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
         }
-    }
-
-    pub fn scan<T>(&mut self) -> Result<T, Error>
-    where
-        T: FromTokens<R>,
-    {
-        FromTokens::from_tokens(&mut self.tokenizer)
-    }
-
-    pub fn scan_chars(&mut self) -> Result<Vec<char>, Error> {
-        Ok(self.scan::<String>()?.chars().collect())
-    }
-
-    pub fn scan_all<T>(&mut self) -> Result<Vec<T>, Error>
-    where
-        T: FromTokens<R>,
-    {
-        let mut result = Vec::new();
-        loop {
-            match self.scan() {
-                Ok(val) => result.push(val),
-                Err(Error::Eof) => return Ok(result),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    pub fn scan_vec<T>(&mut self, n: usize) -> Result<Vec<T>, Error>
-    where
-        T: FromTokens<R>,
-    {
-        let mut result = Vec::new();
-        for _ in 0..n {
-            result.push(self.scan()?)
-        }
-        Ok(result)
     }
 }
 
@@ -309,58 +358,14 @@ fn is_ascii_whitespace(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
 
     #[test]
     fn test_fscan() {
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(-10i64, fscan!(buffer, i64).unwrap());
-        assert_eq!(1.1f64, fscan!(buffer, f64).unwrap());
-
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!((-10i64, 1.1f64), fscan!(buffer, (i64, f64)).unwrap());
-
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(
-            vec![(-10i64, 1.1f64)],
-            fscan!(buffer, [(i64, f64); 1]).unwrap()
-        );
-
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec![-10f64, 1.1f64], fscan!(buffer, [f64; 2]).unwrap());
-
-        let mut buffer = Cursor::new(b"-10\n1.1\n");
-        assert_eq!(vec!['-', '1', '0'], fscan!(buffer, [char]).unwrap());
-    }
-
-    #[test]
-    fn test_sscan() {
-        let s = "-10\n1.1\n";
-        assert_eq!((-10i64, 1.1f64), sscan!(s, (i64, f64)).unwrap());
-        assert_eq!(
-            vec!["-10".to_string(), "1.1".to_string()],
-            sscan!(s, [String]).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_readln() {
-        let mut buffer = Cursor::new(b"-10\n1.1\r\n");
-        assert_eq!(Some("-10".to_string()), freadln(&mut buffer).unwrap());
-        assert_eq!(Some("1.1".to_string()), freadln(&mut buffer).unwrap());
-        assert_eq!(None, freadln(&mut buffer).unwrap());
-    }
-
-    #[test]
-    fn test_scanner() {
-        let mut buffer: &[u8] = b"-10\n1.1\n";
-        let mut sc = Scanner::new(&mut buffer);
-        assert_eq!(sc.scan::<i64>().unwrap(), -10i64);
-        assert_eq!(sc.scan::<f64>().unwrap(), 1.1f64);
-        match sc.scan::<f64>() {
-            Err(Error::Eof) => {} // expected
-            _ => panic!("unexpected result"),
-        }
+        let mut buffer: &[u8] = b" 10 11 \n -10.1";
+        let (x, y, z): (i64, i64, f64) = fscan(&mut buffer).unwrap();
+        assert_eq!(x, 10);
+        assert_eq!(y, 11);
+        assert_eq!(z, -10.1);
     }
 
     #[test]
