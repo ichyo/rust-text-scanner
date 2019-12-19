@@ -30,22 +30,22 @@ impl std::error::Error for Error {
     }
 }
 
-pub fn read_line() -> Result<Option<String>, std::io::Error> {
+pub fn read_line() -> Option<String> {
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
-    fread_line(&mut stdin)
+    fread_line(&mut stdin).expect("IO error")
 }
 
-pub fn scan<T: FromTokens>() -> Result<T, Error> {
+pub fn scan<T: FromTokens>() -> T {
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
-    fscan(&mut stdin)
+    fscan(&mut stdin).expect("IO error")
 }
 
-pub fn scanln<T: FromTokens>() -> Result<T, Error> {
+pub fn scanln<T: FromTokens>() -> T {
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
-    fscanln(&mut stdin)
+    fscanln(&mut stdin).expect("IO error")
 }
 
 pub fn scan_iter<T: FromTokens>() -> ScanIter<T> {
@@ -54,18 +54,16 @@ pub fn scan_iter<T: FromTokens>() -> ScanIter<T> {
     }
 }
 
-pub fn scanln_iter<T: FromTokens>() -> Result<ScanlnIter<T>, Error> {
+pub fn scanln_iter<T: FromTokens>() -> ScanlnIter<T> {
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
-    let s = match fread_line(&mut stdin) {
-        Ok(Some(s)) => s,
-        Ok(None) => "".to_string(),
-        Err(e) => return Err(Error::IoError(e)),
-    };
-    Ok(ScanlnIter {
+    let s = fread_line(&mut stdin)
+        .expect("IO error")
+        .unwrap_or_else(String::new);
+    ScanlnIter {
         cursor: std::io::Cursor::new(s),
         item_type: std::marker::PhantomData,
-    })
+    }
 }
 
 pub fn fread_line<R: std::io::BufRead>(r: &mut R) -> Result<Option<String>, std::io::Error> {
