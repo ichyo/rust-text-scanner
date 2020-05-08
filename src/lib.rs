@@ -1,9 +1,3 @@
-// to support 1.15.1
-#![allow(unknown_lints)]
-#![allow(renamed_and_removed_lints)]
-#![allow(redundant_field_names)]
-#![allow(bare_trait_objects)]
-
 #[derive(Debug)]
 pub enum Error {
     IoError(std::io::Error),
@@ -184,13 +178,13 @@ pub trait FromTokens
 where
     Self: Sized,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error>;
+    fn from_tokens(tokenizer: &mut dyn Iterator<Item = Result<String, Error>>) -> Result<Self, Error>;
 }
 
 macro_rules! from_tokens_primitives {
     ($($t:ty),*) => { $(
         impl FromTokens for $t {
-            fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+            fn from_tokens(tokenizer: &mut dyn Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
                 let token = tokenizer.next();
                 match token {
                     Some(s) => s?
@@ -225,7 +219,9 @@ where
     T1: FromTokens,
     T2: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error> {
         Ok((T1::from_tokens(tokenizer)?, T2::from_tokens(tokenizer)?))
     }
 }
@@ -236,7 +232,9 @@ where
     T2: FromTokens,
     T3: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -252,7 +250,9 @@ where
     T3: FromTokens,
     T4: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -270,7 +270,9 @@ where
     T4: FromTokens,
     T5: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
@@ -290,7 +292,9 @@ where
     T5: FromTokens,
     T6: FromTokens,
 {
-    fn from_tokens(tokenizer: &mut Iterator<Item = Result<String, Error>>) -> Result<Self, Error> {
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error> {
         Ok((
             T1::from_tokens(tokenizer)?,
             T2::from_tokens(tokenizer)?,
