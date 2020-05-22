@@ -317,7 +317,7 @@ impl<'a, R: std::io::Read> Tokenizer<'a, R> {
         let mut token = Vec::new();
         for b in self.reader.by_ref().bytes() {
             let b = b.map_err(Error::IoError)?;
-            match (is_ascii_whitespace(b), token.is_empty()) {
+            match (u8::is_ascii_whitespace(&b), token.is_empty()) {
                 (false, _) => token.push(b),
                 (true, false) => break,
                 (true, true) => {}
@@ -340,14 +340,6 @@ impl<'a, R: std::io::Read> Iterator for Tokenizer<'a, R> {
             Ok(None) => None,
             Err(e) => Some(Err(e)),
         }
-    }
-}
-
-fn is_ascii_whitespace(b: u8) -> bool {
-    // Can use u8::is_ascii_whitespace once removing support of 1.15.1
-    match b {
-        b'\t' | b'\n' | b'\x0C' | b'\r' | b' ' => true,
-        _ => false,
     }
 }
 
