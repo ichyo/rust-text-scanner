@@ -8,7 +8,7 @@ The minimum supported compiler version is 1.31.0.
 
 ### Read three integers and one string.
 
-```
+```rust
 use text_scanner::scan;
 
 fn main() {
@@ -20,7 +20,7 @@ fn main() {
 
 ### Read n integers and output sum.
 
-```
+```rust
 use text_scanner::{scan, scan_iter};
 
 fn main() {
@@ -32,7 +32,7 @@ fn main() {
 
 ### Read edges (0-index) and construct adjacent list
 
-```
+```rust
 use text_scanner::{scan, scan_iter};
 
 fn main() {
