@@ -17,12 +17,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    // dummy implementation for 1.15.1
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-}
+impl std::error::Error for Error {}
 
 pub fn read_line() -> Option<String> {
     let stdin = std::io::stdin();
@@ -178,7 +173,9 @@ pub trait FromTokens
 where
     Self: Sized,
 {
-    fn from_tokens(tokenizer: &mut dyn Iterator<Item = Result<String, Error>>) -> Result<Self, Error>;
+    fn from_tokens(
+        tokenizer: &mut dyn Iterator<Item = Result<String, Error>>,
+    ) -> Result<Self, Error>;
 }
 
 macro_rules! from_tokens_primitives {
@@ -312,7 +309,7 @@ struct Tokenizer<'a, R: std::io::Read + 'a> {
 
 impl<'a, R: std::io::Read> Tokenizer<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
-        Tokenizer { reader: reader }
+        Tokenizer { reader }
     }
 
     pub fn next_token(&mut self) -> Result<Option<String>, Error> {
