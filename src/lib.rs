@@ -31,6 +31,16 @@ pub fn scan<T: FromTokens>() -> T {
     fscan(&mut stdin).expect("IO error")
 }
 
+pub fn scan_opt<T: FromTokens>() -> Option<T> {
+    let stdin = std::io::stdin();
+    let mut stdin = stdin.lock();
+    match fscan(&mut stdin) {
+        Ok(x) => Some(x),
+        Err(Error::Eof) => None,
+        Err(e) => panic!("IO error: {:?}", e),
+    }
+}
+
 pub fn scanln<T: FromTokens>() -> T {
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock();
