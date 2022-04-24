@@ -3,6 +3,13 @@ A simple text scanner to parse primitive types with no dependency for competitiv
 
 The minimum supported compiler version is 1.31.0.
 
+## Usage
+
+```toml
+[dependencies]
+text-scanner = { git = "https://github.com/ichyo/rust-text-scanner" }
+```
+
 
 ## Examples
 
